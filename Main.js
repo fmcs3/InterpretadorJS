@@ -1,8 +1,4 @@
-function teste (a,b) {
-	return a;
-}
+var a = 10;
 
-var a = teste("Ola","Ola");
-
-
-
+var a = [20, 100, "Ola!"];
+head(a);

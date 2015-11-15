@@ -28,6 +28,12 @@ evalExpr env (AssignExpr OpAssign (LVar var) expr) = do
             e <- evalExpr env expr
             setVar var e
 
+----------------------------LISTA------------------------
+evalExpr env (ArrayLit []) = return $ (List [])
+evalExpr env (ArrayLit b) = do
+    a <- mapM (evalExpr env) b
+    return $ (List a)
+
 evalExpr env (UnaryAssignExpr a (LVar var)) = do
     v <- stateLookup env var
     case v of
@@ -42,9 +48,14 @@ evalExpr env (CallExpr funcRef funcArgs) = ST $ \s ->
     let (ST a) = return Nil
         (t, newS) = a s
         (ST g) = do
-            (Function nome args body)  <- evalExpr env funcRef
-            evalFuncArgs env args funcArgs
-            evalStmt env (BlockStmt body)
+            value  <- evalExpr env funcRef
+            case value of
+                (Function nome args body) -> do
+                    eval <- evalFuncArgs env args funcArgs
+                    case eval of
+                        (Error a) -> return (Error a)
+                        _ -> evalStmt env (BlockStmt body)
+                _ -> return (Error "Function not defined")
         (resp,ign) = g newS
         fEnv = intersection ign s
         in (resp,fEnv) 
@@ -58,7 +69,6 @@ evalFuncArgs env (x:xs) (y:ys) = do
     val <- evalExpr env y
     setVar (unId x) val
     evalFuncArgs env xs ys   
-
 
 evalStmt :: StateT -> Statement -> StateTransformer Value
 evalStmt env (EmptyStmt) = return Nil
@@ -135,6 +145,7 @@ evalStmt env (ForStmt inicio expressao incremento comando) = do
 evalInit env (NoInit) = return Nil
 evalInit env (VarInit a) = (evalStmt env (VarDeclStmt a))
 evalInit env (ExprInit b) = (evalExpr env b)
+
 
 -----------------------------------------------------       
 
