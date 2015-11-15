@@ -1,8 +1,8 @@
 function teste (a,b) {
-	return a + b;
+	return a;
 }
 
-var a = teste(10,10);
+var a = teste("Ola","Ola");
 
 
 
