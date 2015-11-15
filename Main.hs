@@ -37,23 +37,47 @@ evalExpr env (UnaryAssignExpr a (LVar var)) = do
             e <-  postfixOp env a (v)
             setVar var e
 
+evalExpr env (CallExpr funcRef funcArgs) = ST $ \s ->
+    let (ST a) = return Nil
+        (t, newS) = a s
+        (ST g) = do
+            (Function nome args body)  <- evalExpr env funcRef
+            evalFuncArgs env args funcArgs
+            evalStmt env (BlockStmt body)
+        (resp,ign) = g newS
+        fEnv = intersection ign s
+        in (resp,fEnv) 
+
+--Inicializa os Argumentos das Funções
+evalFuncArgs :: StateT -> [Id] -> [Expression] -> StateTransformer Value
+evalFuncArgs env (x:xs) [] = return (Error "Número de argumentos errados")
+evalFuncArgs env [] (x:xs) = return (Error "Número de argumentos errados")
+evalFuncArgs env [] [] = return Nil
+evalFuncArgs env (x:xs) (y:ys) = do
+    val <- evalExpr env y
+    setVar (unId x) val
+    evalFuncArgs env xs ys   
+
 
 evalStmt :: StateT -> Statement -> StateTransformer Value
-evalStmt env EmptyStmt = return Nil
+evalStmt env (EmptyStmt) = return Nil
 evalStmt env (VarDeclStmt []) = return Nil
 evalStmt env (VarDeclStmt (decl:ds)) =
     varDecl env decl >> evalStmt env (VarDeclStmt ds)
 evalStmt env (ExprStmt expr) = evalExpr env expr
+ 
 
 
 -----------------BlockStmt (x:xs)--------------------------
 evalStmt env (BlockStmt []) = return Nil
 evalStmt env (BlockStmt (x:xs)) = do
-	case x of
-		(BreakStmt Nothing) -> return Nil
-		_ -> do
-			evalStmt env x
-			evalStmt env (BlockStmt xs)
+    case x of
+        (BreakStmt Nothing) -> return Break
+        (ReturnStmt (Just expr)) -> evalExpr env expr
+        (ReturnStmt Nothing) -> return Nil
+        _ -> do
+            evalStmt env x
+            evalStmt env (BlockStmt xs)
 
 ---------------------BLOCO IF------------------------------ 
 evalStmt env (IfSingleStmt expr ifBlock) = do
@@ -71,8 +95,11 @@ evalStmt env (IfStmt expr ifBlock elseBlock) = do
 		
 -----------------------------------------------------------
 
--------------------------------------------------------------
+----------------------FUNCTION---------------------------
+evalStmt env (FunctionStmt (Id funcId) funcArgs funcBody) = do
+    setVar funcId (Function (Id funcId) funcArgs funcBody)
 
+evalStmt env (ExprStmt expr) = evalExpr env expr
 
 -----------------------BLOCO FOR-----------------------------
 -----------------------FOR-----------------------------------		
@@ -86,7 +113,7 @@ evalStmt env (ForStmt inicio expressao incremento comando) = do
                             if b then do
                                 eval <- evalStmt env comando
                                 case eval of    -- Vamos checar se o break foi chamado
-                                    Nil -> return Nil
+                                    Break -> return Nil
                                     _ -> do
                                         case incremento of
                                             (Just expr) -> evalExpr env expr
@@ -96,7 +123,7 @@ evalStmt env (ForStmt inicio expressao incremento comando) = do
                 (Nothing) -> do
                             eval <- evalStmt env comando
                             case eval of    -- Vamos checar se o break foi chamado
-                                Nil -> return Nil
+                                Break -> return Nil
                                 _ -> do
                                     case incremento of
                                         (Just expr) -> evalExpr env expr
@@ -107,9 +134,6 @@ evalStmt env (ForStmt inicio expressao incremento comando) = do
 evalInit env (NoInit) = return Nil
 evalInit env (VarInit a) = (evalStmt env (VarDeclStmt a))
 evalInit env (ExprInit b) = (evalExpr env b)
-
------------------------------------------------------------
-
 
 -----------------------------------------------------       
 
@@ -152,10 +176,6 @@ infixOp env op v1 (Var x) = do
 
 
 postfixOp env PostfixInc  (Int a) = return $ Int $ a + 1
-
-
-
-
 
 --
 -- Environment and auxiliary functions

@@ -1,11 +1,8 @@
-var x = 0, y = 1, z = 2;
+function teste (a,b) {
+	return a + b;
+}
 
-for(var a = 1; ; z++){
-	break;
-	a++;
-} 
-
-y = 9;
+var a = teste(10,10);
 
 
 
